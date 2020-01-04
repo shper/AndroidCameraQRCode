@@ -1,11 +1,10 @@
-package cn.shper.demo.zxing.camera2.internal.view;
+package cn.shper.demo.zxing.base.view;
 
 import android.content.Context;
 import android.util.AttributeSet;
 import android.view.TextureView;
 
 public class AutoFitTextureView extends TextureView {
-
 
     private int mRatioWidth = 0;
     private int mRatioHeight = 0;

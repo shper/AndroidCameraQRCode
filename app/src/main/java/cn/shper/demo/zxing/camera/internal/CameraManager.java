@@ -7,7 +7,6 @@ import android.hardware.Camera;
 import android.os.Handler;
 import android.util.Log;
 import android.view.SurfaceHolder;
-import com.google.zxing.PlanarYUVLuminanceSource;
 
 import java.io.IOException;
 
@@ -148,7 +147,6 @@ public final class CameraManager {
     }
 
     /**
-     *
      * @param newSetting if {@code true}, light should be turned on if currently off. And vice versa.
      */
     public synchronized void setTorch(boolean newSetting) {
@@ -263,7 +261,7 @@ public final class CameraManager {
      * Allows third party apps to specify the scanning rectangle dimensions, rather than determine
      * them automatically based on screen resolution.
      *
-     * @param width The width in pixels to scan.
+     * @param width  The width in pixels to scan.
      * @param height The height in pixels to scan.
      */
     public synchronized void setManualFramingRect(int width, int height) {
@@ -284,33 +282,6 @@ public final class CameraManager {
             requestedFramingRectWidth = width;
             requestedFramingRectHeight = height;
         }
-    }
-
-    /**
-     * A factory method to build the appropriate LuminanceSource object based on the format
-     * of the preview buffers, as described by Camera.Parameters.
-     *
-     * @param data A preview frame.
-     * @param width The width of the image.
-     * @param height The height of the image.
-     * @return A PlanarYUVLuminanceSource instance.
-     */
-    public PlanarYUVLuminanceSource buildLuminanceSource(byte[] data, int width, int height) {
-        Rect rect = getFramingRectInPreview();
-        if (rect == null) {
-            return null;
-        }
-
-        Log.d(TAG, "Decode : " + "data.length: " + data.length
-                + " ;width: " + width + " ;height: " + height
-                + " ;rect.left: " + rect.left
-                + " ;rect.top: " + rect.top
-                + " ;rect.width: " + rect.width()
-                + " ;rect.height: " + rect.height());
-
-        // Go ahead and assume it's YUV rather than die.
-        return new PlanarYUVLuminanceSource(data, width, height, rect.left, rect.top,
-                rect.width(), rect.height(), false);
     }
 
 }

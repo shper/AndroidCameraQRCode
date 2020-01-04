@@ -2,11 +2,15 @@ package cn.shper.demo.zxing.camera;
 
 import android.os.Bundle;
 import android.os.Handler;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.TextClock;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -15,7 +19,6 @@ import java.io.IOException;
 import cn.shper.demo.zxing.R;
 import cn.shper.demo.zxing.base.view.ViewfinderView;
 import cn.shper.demo.zxing.camera.internal.CameraManager;
-import cn.shper.demo.zxing.camera2.internal.view.AutoFitTextureView;
 
 /**
  * Author : shixupan
@@ -28,8 +31,9 @@ public class CameraScanActivity extends AppCompatActivity implements SurfaceHold
 
     private CameraManager cameraManager;
     private CameraScanActivityHandler handler;
-
     private ViewfinderView viewfinderView;
+    private TextView resultTxt;
+
     private boolean hasSurface;
 
     @Override
@@ -39,6 +43,8 @@ public class CameraScanActivity extends AppCompatActivity implements SurfaceHold
         Window window = getWindow();
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_camera);
+
+        resultTxt = findViewById(R.id.result_txt);
 
         hasSurface = false;
     }
@@ -116,7 +122,7 @@ public class CameraScanActivity extends AppCompatActivity implements SurfaceHold
             cameraManager.openDriver(surfaceHolder);
             // Creating the handler starts the preview, which can also throw a RuntimeException.
             if (handler == null) {
-                handler = new CameraScanActivityHandler(this, "UTF8", cameraManager);
+                handler = new CameraScanActivityHandler(this, cameraManager);
             }
         } catch (IOException ioe) {
             Log.w(TAG, ioe);
@@ -131,8 +137,12 @@ public class CameraScanActivity extends AppCompatActivity implements SurfaceHold
         viewfinderView.drawViewfinder();
     }
 
-    public ViewfinderView getViewfinderView() {
-        return viewfinderView;
+    public void showResult(String text) {
+        if (TextUtils.isEmpty(text)) {
+            resultTxt.setText("NotFound!!!");
+        } else {
+            resultTxt.setText(text);
+        }
     }
 
     public Handler getHandler() {

@@ -23,43 +23,32 @@ import android.media.ImageReader;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.text.TextUtils;
 import android.util.Log;
 import android.util.Size;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.Window;
-import android.widget.Toast;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
-import com.google.zxing.BarcodeFormat;
-import com.google.zxing.BinaryBitmap;
-import com.google.zxing.DecodeHintType;
-import com.google.zxing.MultiFormatReader;
-import com.google.zxing.PlanarYUVLuminanceSource;
-import com.google.zxing.ReaderException;
 import com.google.zxing.Result;
-import com.google.zxing.common.HybridBinarizer;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 import cn.shper.demo.zxing.R;
-import cn.shper.demo.zxing.base.DecodeFormatManager;
-import cn.shper.demo.zxing.base.view.ViewfinderView;
-import cn.shper.demo.zxing.camera2.internal.view.AutoFitTextureView;
+import cn.shper.demo.zxing.base.decode.DecodeFormatManager;
+import cn.shper.demo.zxing.base.view.AutoFitTextureView;
 
 import static android.hardware.camera2.CameraCharacteristics.LENS_FACING;
 import static android.hardware.camera2.CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP;
@@ -77,6 +66,8 @@ public class Camera2ScanActivity extends AppCompatActivity {
 
     private AutoFitTextureView mTextureView;
 
+    private TextView resultTxt;
+
     private String mCameraId;
 
     private ImageReader mScanImageReader;
@@ -93,7 +84,7 @@ public class Camera2ScanActivity extends AppCompatActivity {
 
     private Size mPreviewSize;
 
-    private MultiFormatReader mMultiFormatReader;
+    private DecodeFormatManager mDecodeFormatManager;
 
     private HandlerThread mBackgroundThread;
 
@@ -105,8 +96,9 @@ public class Camera2ScanActivity extends AppCompatActivity {
         setContentView(R.layout.activity_camera2);
 
         mTextureView = findViewById(R.id.preview_view);
+        resultTxt = findViewById(R.id.result_txt);
 
-        initMultiFormatReader();
+        mDecodeFormatManager = new DecodeFormatManager("utf-8", null);
     }
 
     @Override
@@ -206,17 +198,17 @@ public class Camera2ScanActivity extends AppCompatActivity {
                 List<Size> outputSizes = Arrays.asList(map.getOutputSizes(sImageFormat));
                 Size largest = Collections.max(outputSizes, new CompareSizesByArea());
 
-                mScanImageReader = ImageReader.newInstance(largest.getWidth() / 16,
-                        largest.getHeight() / 16,
-                        sImageFormat, 2);
-
-                mScanImageReader.setOnImageAvailableListener(mOnScanImageAvailableListener,
-                        mBackgroundHandler);
                 // Danger, W.R.! Attempting to use too large a preview size could exceed the camera
                 // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
                 // garbage capture data.
                 mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class), width, height, largest);
                 Log.e(TAG, "WIDTH: " + mPreviewSize.getWidth() + " HEIGHT: " + mPreviewSize.getHeight());
+
+                mScanImageReader = ImageReader.newInstance(mPreviewSize.getWidth(), mPreviewSize.getHeight(),
+                        sImageFormat, 2);
+
+                mScanImageReader.setOnImageAvailableListener(mOnScanImageAvailableListener,
+                        mBackgroundHandler);
 
                 Point screenParametersPoint = new Point();
                 getWindowManager().getDefaultDisplay().getSize(screenParametersPoint);
@@ -406,74 +398,21 @@ public class Camera2ScanActivity extends AppCompatActivity {
             byte[] data = new byte[buffer.remaining()];
             buffer.get(data);
 
-            decode(data, imageWidth, imageHeight);
+            Result result = mDecodeFormatManager.decode(
+                    mDecodeFormatManager.buildYUVLuminanceSource(data, imageWidth, imageHeight, null));
+
+            runOnUiThread(() -> {
+                if (result == null || TextUtils.isEmpty(result.getText())) {
+                    resultTxt.setText("NotFound!!!");
+                } else {
+                    resultTxt.setText(result.getText());
+                }
+            });
 
             image.close();
             mCapturePicture.release();
         }
     };
-
-    private Result decode(byte[] data, int width, int height) {
-//        Log.d(TAG, "Decode : " + "data.length: " + data.length
-//                   + " ;width: " + width + " ;height: " + height
-//                   + " ;rect.left: " + rect.left
-//                   + " ;rect.top: " + rect.top
-//                   + " ;rect.width: " + rect.width()
-//                   + " ;rect.height: " + rect.height());
-
-        //        Rect rect = new Rect(mFramingRectInPreview);
-        //            BitmapFactory.Options options = new BitmapFactory.Options();
-        //            options.inJustDecodeBounds = false;
-        ////            BitmapFactory.decodeByteArray(data, 0, data.length, options);
-        ////            options.inSampleSize = computeSampleSize(options, -1, 1920 * 1080);
-        ////            options.inJustDecodeBounds = false;
-        //        Bitmap bitmap1 = BitmapFactory.decodeByteArray(data, 0, data.length, options);
-        //        int[] pixels = new int[width * height];
-        //        bitmap1.getPixels(pixels, 0, width, 0, 0, width, height);
-        //
-        //        RGBLuminanceSource source = new RGBLuminanceSource(width, height, pixels);
-
-        PlanarYUVLuminanceSource source = new PlanarYUVLuminanceSource(
-                data, width, height,
-                0, 0, width, height, false);
-
-        BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
-
-        Result result = null;
-        try {
-            result = mMultiFormatReader.decodeWithState(bitmap);
-            Log.d(TAG, "Decode: result=" + result.getText());
-            Toast.makeText(this, result.getText(), Toast.LENGTH_SHORT).show();
-        } catch (ReaderException re) {
-            Log.e(TAG, "Decode: ", re);
-        } finally {
-            mMultiFormatReader.reset();
-        }
-
-        return result;
-    }
-
-    private MultiFormatReader initMultiFormatReader() {
-        if (mMultiFormatReader == null) {
-            mMultiFormatReader = new MultiFormatReader();
-
-            // The prefs can't change while the thread is running, so pick them up once here.
-            Collection<BarcodeFormat> decodeFormats = EnumSet.noneOf(BarcodeFormat.class);
-            decodeFormats.addAll(DecodeFormatManager.PRODUCT_FORMATS);
-            decodeFormats.addAll(DecodeFormatManager.INDUSTRIAL_FORMATS);
-            decodeFormats.addAll(DecodeFormatManager.QR_CODE_FORMATS);
-            decodeFormats.addAll(DecodeFormatManager.DATA_MATRIX_FORMATS);
-            decodeFormats.addAll(DecodeFormatManager.AZTEC_FORMATS);
-
-            final Map<DecodeHintType, Object> hints = new EnumMap<>(DecodeHintType.class);
-            hints.put(DecodeHintType.POSSIBLE_FORMATS, decodeFormats);
-            // 解码设置编码方式为：utf-8，
-            hints.put(DecodeHintType.CHARACTER_SET, "utf-8");
-            mMultiFormatReader.setHints(hints);
-        }
-
-        return mMultiFormatReader;
-    }
 
     private static class CompareSizesByArea implements Comparator<Size> {
 
@@ -483,7 +422,6 @@ public class Camera2ScanActivity extends AppCompatActivity {
             return Long.signum((long) lhs.getWidth() * lhs.getHeight() -
                     (long) rhs.getWidth() * rhs.getHeight());
         }
-
     }
 
     public int getStatusBarHeight() {

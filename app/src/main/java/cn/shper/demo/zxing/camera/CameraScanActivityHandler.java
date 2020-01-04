@@ -3,9 +3,12 @@ package cn.shper.demo.zxing.camera;
 import android.os.Handler;
 import android.os.Message;
 
+import com.google.zxing.PlanarYUVLuminanceSource;
+import com.google.zxing.Result;
+
 import cn.shper.demo.zxing.R;
+import cn.shper.demo.zxing.base.decode.DecodeFormatManager;
 import cn.shper.demo.zxing.camera.internal.CameraManager;
-import cn.shper.demo.zxing.camera.internal.decode.DecodeThread;
 
 /**
  * This class handles all the messaging which comprises the state machine for capture.
@@ -15,46 +18,68 @@ import cn.shper.demo.zxing.camera.internal.decode.DecodeThread;
 public final class CameraScanActivityHandler extends Handler {
 
     private final CameraScanActivity activity;
-    private final DecodeThread decodeThread;
     private final CameraManager cameraManager;
+    private final DecodeFormatManager decodeFormatManager;
 
     public CameraScanActivityHandler(CameraScanActivity activity,
-                                     String characterSet,
                                      CameraManager cameraManager) {
         this.activity = activity;
-        decodeThread = new DecodeThread(activity, characterSet, null);
-        decodeThread.start();
+        decodeFormatManager = new DecodeFormatManager("utf-8", null);
 
         // Start ourselves capturing previews and decoding.
         this.cameraManager = cameraManager;
         cameraManager.startPreview();
-        restartPreviewAndDecode();
+        restartPreviewAndDecode("");
     }
 
     @Override
     public void handleMessage(Message message) {
         switch (message.what) {
             case R.id.restart_preview:
-                restartPreviewAndDecode();
+                restartPreviewAndDecode((String) message.obj);
                 break;
+            case R.id.decode:
+                decode((byte[]) message.obj, message.arg1, message.arg2);
         }
     }
 
     public void quitSynchronously() {
         cameraManager.stopPreview();
-        Message quit = Message.obtain(decodeThread.getHandler(), R.id.quit);
+        Message quit = Message.obtain(this, R.id.quit);
         quit.sendToTarget();
-        try {
-            // Wait at most half a second; should be enough time, and onPause() will timeout quickly
-            decodeThread.join(500L);
-        } catch (InterruptedException e) {
-            // continue
-        }
     }
 
-    private void restartPreviewAndDecode() {
-        cameraManager.requestPreviewFrame(decodeThread.getHandler(), R.id.decode);
+    private void restartPreviewAndDecode(String text) {
+        cameraManager.requestPreviewFrame(this, R.id.decode);
         activity.drawViewfinder();
+
+        activity.showResult(text);
+    }
+
+    /**
+     * Decode the data within the viewfinder rectangle, and time how long it took. For efficiency,
+     * reuse the same reader objects from one decode to the next.
+     *
+     * @param data   The YUV preview frame.
+     * @param width  The width of the preview frame.
+     * @param height The height of the preview frame.
+     */
+    private void decode(byte[] data, int width, int height) {
+        PlanarYUVLuminanceSource source = decodeFormatManager.buildYUVLuminanceSource(data, width, height,
+                null);
+
+        Result result = decodeFormatManager.decode(source);
+        String text = "";
+        if (result != null) {
+            text = result.getText();
+        }
+
+        // 重新扫描
+        Handler handler = activity.getHandler();
+        if (handler != null) {
+            Message message = Message.obtain(handler, R.id.restart_preview, text);
+            message.sendToTarget();
+        }
     }
 
 }
